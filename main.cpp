@@ -107,10 +107,8 @@ bool strEqualMask(string mask, string str)
    return true;
 }
 
-vector<OutputDate> find(const vector<string> &strings, const string &mask, size_t begin, size_t end)
-{
-   vector<OutputDate> answer;
-   
+void find(vector<OutputDate> &output, const vector<string> &strings, const string &mask, size_t begin, size_t end)
+{   
    if(!(begin>=end||end>strings.size()||end==0))
    {
       for(size_t i=begin; i<end; ++i)
@@ -138,7 +136,7 @@ vector<OutputDate> find(const vector<string> &strings, const string &mask, size_
          
                if(attIsFound)
                {   
-                  answer.push_back({i, j, curr_str});
+                  output.push_back({i, j, curr_str});
                   j+=curr_str.length();
                }
             }
@@ -147,7 +145,6 @@ vector<OutputDate> find(const vector<string> &strings, const string &mask, size_
    }
    else
       cerr<<"Wrong begin and end parameters!\n";
-   return answer;
 }
 
 void outInfo(const vector<OutputDate> &output)
@@ -180,13 +177,28 @@ int main(int argc, char* argv[])
       cerr<<"Strings set is empty.\n";
       return 3;
    }
-   const auto processor_count = std::thread::hardware_concurrency();
+   int processor_count=thread::hardware_concurrency();
+   
+   if(processor_count<=0)
+   {
+      clog<<"Warning : processor count for your computer is not defind! It will be 1 by default.\n";
+      processor_count=1;
+   }
    size_t str_amount=strings.size()/processor_count;
    
    if(strings.size()%processor_count>0)
       ++str_amount;
-   //cout<<"str_amount="<<str_amount<<";\n";//for(int i=0; i<processor_count; ++i)
-   vector<OutputDate> output=find(strings, mask, 0, strings.size());
+   size_t start=0;
+   vector<OutputDate> output;
+   
+   for(int i=0; i<processor_count; ++i)
+   {
+      size_t end=(i<processor_count-1)
+                ?start+str_amount
+                :strings.size();
+      thread find_thread([&]() {find(output, strings, mask, start, end);});
+      find_thread.join();
+   }   
    outInfo(output);
    return 0;
 }
