@@ -106,41 +106,46 @@ bool strEqualMask(string mask, string str)
    return true;
 }
 
-vector<OutputDate> find(const vector<string> &strings, const string &mask)
+vector<OutputDate> find(const vector<string> &strings, const string &mask, size_t begin, size_t end)
 {
    vector<OutputDate> answer;
    
-   for(size_t i=0; i<strings.size(); ++i)
+   if(!(begin>=end||end>strings.size()||end==0))
    {
-      string str=strings[i];
-      
-      if(!str.length()<mask.length())
+      for(size_t i=begin; i<end; ++i)
       {
-         size_t j=0;
-         
-         while(j<str.length()-mask.length())
+         string str=strings[i];
+      
+         if(!str.length()<mask.length())
          {
-            string curr_str=getStr(str, j, mask.length());
-            bool attIsFound=strEqualMask(mask, curr_str);
+            size_t j=0;
          
-            while(
-               j<str.length()-mask.length()&&
-               (!attIsFound)
-            )
+            while(j<str.length()-mask.length())
             {
-               ++j;
-               curr_str=getStr(str, j, mask.length());
-               attIsFound=strEqualMask(mask, curr_str);
-            }
+               string curr_str=getStr(str, j, mask.length());
+               bool attIsFound=strEqualMask(mask, curr_str);
          
-            if(attIsFound)
-            {   
-               answer.push_back({i, j, curr_str});
-               j+=curr_str.length();
+               while(
+                  j<str.length()-mask.length()&&
+                  (!attIsFound)
+               )
+               {
+                  ++j;
+                  curr_str=getStr(str, j, mask.length());
+                  attIsFound=strEqualMask(mask, curr_str);
+               }
+         
+               if(attIsFound)
+               {   
+                  answer.push_back({i, j, curr_str});
+                  j+=curr_str.length();
+               }
             }
          }
       }
    }
+   else
+      cerr<<"Wrong begin and end parameters!\n";
    return answer;
 }
 
@@ -168,7 +173,7 @@ int main(int argc, char* argv[])
       return 2;
    }
    vector<string> strings=read(filename);
-   vector<OutputDate> output=find(strings, mask);
+   vector<OutputDate> output=find(strings, mask, 0, strings.size());
    outInfo(output);
    return 0;
 }
