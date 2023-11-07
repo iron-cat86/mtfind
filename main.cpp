@@ -44,6 +44,7 @@ But I've come through.
 #include <vector>
 #include <fstream>
 #include <thread>
+#include <algorithm>
 
 using namespace std;
 
@@ -54,6 +55,18 @@ struct OutputDate
    string attachment;
 };
 
+struct
+{
+   bool operator()(OutputDate a, OutputDate b) const 
+   {
+      return (
+         (a.strNumber<b.strNumber)||
+         (a.strNumber==b.strNumber&&a.posNumber<b.posNumber)
+      );
+   }
+}
+OutputDateCompare;
+    
 vector<string> read(char* filename)
 {
    vector<string> answer; 
@@ -144,11 +157,12 @@ void find(vector<OutputDate> &output, const vector<string> &strings, const strin
       }
    }
    else
-      cerr<<"Wrong begin and end parameters!\n";
+      cerr<<"Wrong begin="<<begin<<" and end="<<end<<" parameters!\n";
 }
 
-void outInfo(const vector<OutputDate> &output)
+void outInfo(vector<OutputDate> &output)
 {
+   sort(output.begin(), output.end(), OutputDateCompare);
    cout<<output.size()<<"\n";
    
    for(OutputDate date: output)
@@ -198,6 +212,7 @@ int main(int argc, char* argv[])
                 :strings.size();
       thread find_thread([&]() {find(output, strings, mask, start, end);});
       find_thread.join();
+      start=end;
    }   
    outInfo(output);
    return 0;
