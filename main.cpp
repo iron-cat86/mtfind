@@ -43,6 +43,7 @@ But I've come through.
 #include <string>
 #include <vector>
 #include <fstream>
+#include <thread>
 
 using namespace std;
 
@@ -116,7 +117,7 @@ vector<OutputDate> find(const vector<string> &strings, const string &mask, size_
       {
          string str=strings[i];
       
-         if(!str.length()<mask.length())
+         if(str.length()>=mask.length())
          {
             size_t j=0;
          
@@ -173,6 +174,18 @@ int main(int argc, char* argv[])
       return 2;
    }
    vector<string> strings=read(filename);
+   
+   if(strings.empty())
+   {
+      cerr<<"Strings set is empty.\n";
+      return 3;
+   }
+   const auto processor_count = std::thread::hardware_concurrency();
+   size_t str_amount=strings.size()/processor_count;
+   
+   if(strings.size()%processor_count>0)
+      ++str_amount;
+   //cout<<"str_amount="<<str_amount<<";\n";//for(int i=0; i<processor_count; ++i)
    vector<OutputDate> output=find(strings, mask, 0, strings.size());
    outInfo(output);
    return 0;
