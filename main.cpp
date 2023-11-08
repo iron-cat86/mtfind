@@ -45,6 +45,7 @@ But I've come through.
 #include <fstream>
 #include <thread>
 #include <algorithm>
+#include <filesystem>
 
 using namespace std;
 
@@ -74,6 +75,8 @@ vector<string> read(char* filename)
    
    if(!file.is_open())
       cerr<<"It is impossible to read this file! Check file name, or path to file, or file existing.\n";
+   else if(filesystem::file_size(filename)>1000000)
+      cerr<<"File is more 1 GB!\n";
    else
    {
       string s;
