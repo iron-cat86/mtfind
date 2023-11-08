@@ -69,7 +69,7 @@ struct
 OutputDateCompare;
 
 std::mutex mt;
-size_t string_count=0;
+size_t     string_count=0;
 
 bool strEqualMask(const std::string &mask, const std::string &str)
 {
@@ -149,7 +149,7 @@ void sortOutAndCheckInfo(std::vector<OutputDate> &output, std::vector<OutputDate
       std::cout<<output.size()<<"\n";
    size_t t=0;
    
-   for(OutputDate date: output)
+   for(const OutputDate &date: output)
    {
       if(n==0)
       {
