@@ -58,7 +58,7 @@ struct OutputDate
 
 struct
 {
-   bool operator()(OutputDate a, OutputDate b) const 
+   bool operator()(const OutputDate &a, const OutputDate &b) const 
    {
       return (
          (a.strNumber<b.strNumber)||
@@ -67,9 +67,6 @@ struct
    }
 }
 OutputDateCompare;
-
-std::mutex mt;
-size_t     string_count=0;
 
 bool strEqualMask(const std::string &mask, const std::string &str)
 {
@@ -92,7 +89,7 @@ bool strEqualMask(const std::string &mask, const std::string &str)
    return true;
 }
 
-bool readLine(std::string &s, std::ifstream &file, size_t &curr_str_count)
+bool readLine(std::string &s, std::ifstream &file, size_t &curr_str_count, size_t &string_count, std::mutex &mt)
 {
    mt.lock();
    size_t curfilepos=file.tellg();   
@@ -109,7 +106,7 @@ bool readLine(std::string &s, std::ifstream &file, size_t &curr_str_count)
    return true;
 }
 
-void find(std::vector<OutputDate> &output, const std::string &mask, const std::string &str, const size_t &i)
+void find(std::vector<OutputDate> &output, const std::string &mask, const std::string &str, const size_t &i, std::mutex &mt)
 {      
    if(str.length()>=mask.length())
    {
@@ -175,7 +172,8 @@ int mainRun(const char *filename, const std::string &mask, size_t amount_of_try)
    
    for(int n=0; n<amount_of_try; ++n)
    {
-      string_count=0;
+      std::mutex mt;
+      size_t string_count=0;
       std::ifstream file(filename);
    
       if(!file.is_open())
@@ -204,12 +202,12 @@ int mainRun(const char *filename, const std::string &mask, size_t amount_of_try)
             [&](){
             size_t curr_str_count=0;
             std::string s="";
-            bool reading=readLine(s, file, curr_str_count);
+            bool reading=readLine(s, file, curr_str_count, string_count, mt);
             
             while(reading)   
             {
-               find(output, mask, s, curr_str_count);
-               reading=readLine(s, file, curr_str_count);
+               find(output, mask, s, curr_str_count, mt);
+               reading=readLine(s, file, curr_str_count, string_count, mt);
             }
          }
          ));
