@@ -49,13 +49,11 @@ But I've come through.
 #include <mutex>
 #include <atomic>
 
-using namespace std;
-
 struct OutputDate
 {
-   size_t strNumber=0;
-   size_t posNumber=0;
-   string attachment;
+   size_t      strNumber=0;
+   size_t      posNumber=0;
+   std::string attachment;
 };
 
 struct
@@ -70,15 +68,15 @@ struct
 }
 OutputDateCompare;
 
-mutex mt;
+std::mutex mt;
 size_t string_count=0;
 
-string getStr(const string &str, size_t start, size_t length)
+std::string getStr(const std::string &str, size_t start, size_t length)
 {
-   string answer="";
+   std::string answer="";
    
    if(start+length>str.length())
-      cerr<<"Wrong string getting from \""<<str<<"\" with start="<<start<<" and length="<<length<<"!\n";
+      std::cerr<<"Wrong string getting from \""<<str<<"\" with start="<<start<<" and length="<<length<<"!\n";
    else
    {
       for(size_t i=start; i<start+length; ++i)
@@ -87,7 +85,7 @@ string getStr(const string &str, size_t start, size_t length)
    return answer;
 }
 
-bool strEqualMask(const string &mask, const string &str)
+bool strEqualMask(const std::string &mask, const std::string &str)
 {
    if(mask.length()!=str.length())
       return false;
@@ -108,10 +106,10 @@ bool strEqualMask(const string &mask, const string &str)
    return true;
 }
 
-bool readLine(string &s, ifstream &file, size_t &curr_str_count)
+bool readLine(std::string &s, std::ifstream &file, size_t &curr_str_count)
 {
    mt.lock();
-   size_t curfilepos=file.tellg();
+   size_t curfilepos=file.tellg();   
    getline(file, s);
    
    if(file.tellg()==curfilepos)
@@ -125,7 +123,7 @@ bool readLine(string &s, ifstream &file, size_t &curr_str_count)
    return true;
 }
 
-void find(vector<OutputDate> &output, const string &mask, const string &str, const size_t &i)
+void find(std::vector<OutputDate> &output, const std::string &mask, const std::string &str, const size_t &i)
 {      
    if(str.length()>=mask.length())
    {
@@ -133,7 +131,7 @@ void find(vector<OutputDate> &output, const string &mask, const string &str, con
          
       while(j<str.length()-mask.length())
       {
-         string curr_str=getStr(str, j, mask.length());
+         std::string curr_str=getStr(str, j, mask.length());
          bool attIsFound=strEqualMask(mask, curr_str);
          
          while(
@@ -157,12 +155,12 @@ void find(vector<OutputDate> &output, const string &mask, const string &str, con
    }
 }
 
-void sortOutAndCheckInfo(vector<OutputDate> &output, vector<OutputDate> &firstData, int n)
+void sortOutAndCheckInfo(std::vector<OutputDate> &output, std::vector<OutputDate> &firstData, int n)
 {
-   sort(output.begin(), output.end(), OutputDateCompare);
+   std::sort(output.begin(), output.end(), OutputDateCompare);
    
    if(n==0)
-      cout<<output.size()<<"\n";
+      std::cout<<output.size()<<"\n";
    size_t t=0;
    
    for(OutputDate date: output)
@@ -170,7 +168,7 @@ void sortOutAndCheckInfo(vector<OutputDate> &output, vector<OutputDate> &firstDa
       if(n==0)
       {
          firstData.push_back(date);
-         cout<<date.strNumber+1<<" "<<date.posNumber+1<<" "<<date.attachment<<"\n";
+         std::cout<<date.strNumber+1<<" "<<date.posNumber+1<<" "<<date.attachment<<"\n";
       }
       else
       {
@@ -179,50 +177,49 @@ void sortOutAndCheckInfo(vector<OutputDate> &output, vector<OutputDate> &firstDa
             date.posNumber!=firstData[t].posNumber||
             date.attachment!=firstData[t].attachment
          )
-            clog<<"Program is not correct!\n";
+            std::clog<<"Program is not correct!\n";
          ++t;
       }
    }
 } 
 
-int mainRun(const char *filename, const string &mask, size_t amount_of_try)
+int mainRun(const char *filename, const std::string &mask, size_t amount_of_try)
 {
-   vector<OutputDate> firstData;
+   std::vector<OutputDate> firstData;
    
    for(int n=0; n<amount_of_try; ++n)
    {
       string_count=0;
-      ifstream file(filename);
+      std::ifstream file(filename);
    
       if(!file.is_open())
       {
-         cerr<<"It is impossible to read this file! Check file name, or path to file, or file existing.\n";
+         std::cerr<<"It is impossible to read this file! Check file name, or path to file, or file existing.\n";
          return 4;
       }
-      else if(filesystem::file_size(filename)>1000000000)
+      else if(std::filesystem::file_size(filename)>1000000000)
       {   
-         cerr<<"File is more than 1 GB!\n";
+         std::cerr<<"File is more than 1 GB!\n";
          return 5;
       }
-      int processor_count=thread::hardware_concurrency();
+      int processor_count=std::thread::hardware_concurrency();
    
       if(processor_count<=0)
       {
-         clog<<"Warning : processor count for your computer is not defined! It will be 1 by default.\n";
+         std::clog<<"Warning : processor count for your computer is not defined! It will be 1 by default.\n";
          processor_count=1;
       }
-      vector<OutputDate> output;
-      vector<thread> find_thread;
+      std::vector<OutputDate> output;
+      std::vector<std::thread> find_thread;
    
       for(int i=0; i<processor_count; ++i)
       {
-         find_thread.push_back(thread(
+         find_thread.push_back(std::thread(
             [&](){
             size_t curr_str_count=0;
-            string s="";
-            size_t curfilepos=0;
+            std::string s="";
             bool reading=readLine(s, file, curr_str_count);
-                        
+            
             while(reading)   
             {
                find(output, mask, s, curr_str_count);
@@ -244,21 +241,21 @@ int main(int argc, char* argv[])
 {
    if(argc!=3)
    {
-      cerr<<"Wrong amount of arguments! "<<argc<<"\nUsage: mtfind <input file> \"<mask>\"\n";
+      std::cerr<<"Wrong amount of arguments! "<<argc<<"\nUsage: mtfind <input file> \"<mask>\"\n";
       return 1;
    }
    const char *filename=argv[1];
-   const string mask=argv[2];
+   const std::string mask=argv[2];
    
    if(mask.length()>1000)
    {
-      cerr<<"Mask is too long! "<<mask.length()<<"\n Use mask length less 1000 symbols.\n";
+      std::cerr<<"Mask is too long! "<<mask.length()<<"\n Use mask length less 1000 symbols.\n";
       return 2;
    }
       
    if(mask.contains("\n"))
    {
-      cerr<<"Mask can not contain \"\\n\"-symbol!\n";
+      std::cerr<<"Mask can not contain \"\\n\"-symbol!\n";
       return 3;
    }   
    return mainRun(filename, mask, 1000);
