@@ -49,7 +49,7 @@ But I've come through.
 #include <mutex>
 #include <atomic>
 
-struct OutputDate
+struct OutputData
 {
    size_t      strNumber=0;
    size_t      posNumber=0;
@@ -58,7 +58,7 @@ struct OutputDate
 
 struct
 {
-   bool operator()(const OutputDate &a, const OutputDate &b) const 
+   bool operator()(const OutputData &a, const OutputData &b) const 
    {
       return (
          (a.strNumber<b.strNumber)||
@@ -66,7 +66,55 @@ struct
       );
    }
 }
-OutputDateCompare;
+OutputDataCompare;
+
+class ring_string_buffer
+{
+public:
+    ring_string_buffer(size_t capacity):
+        range(capacity + 1)
+    {
+       storage=new std::pair<std::string, size_t>[range];
+    }
+    
+    inline bool push(const std::string &value, size_t strNum, std::mutex &m_mutex)
+    { 
+        std::unique_lock<std::mutex> t_locker(m_mutex);
+        size_t gn=get_next(tail);
+              
+        if(gn==head)
+           return false;
+        storage[tail]=std::move(std::make_pair(value, strNum));
+        tail=gn;
+        return true;
+    }
+
+    inline bool pop(std::string &value, size_t &strNum, std::mutex &m_mutex)
+    {
+        std::unique_lock<std::mutex> t_locker(m_mutex);
+        
+        if(head==tail)
+           return false;
+        value=std::move(storage[head].first);
+        strNum=std::move(storage[head].second);
+        head=get_next(head);
+        return true;
+    }
+
+private:
+    inline size_t get_next(size_t slot) const
+    {
+       if(slot>=range)
+          return 0;
+       return slot+1;
+    }
+
+private:
+    std::pair<std::string, size_t>* storage;
+    size_t                          range=0;
+    size_t                          tail=0;
+    size_t                          head=0;
+};
 
 bool strEqualMask(const std::string &mask, const std::string &str)
 {
@@ -106,7 +154,7 @@ bool readLine(std::string &s, std::ifstream &file, size_t &curr_str_count, size_
    return true;
 }
 
-void find(std::vector<OutputDate> &output, const std::string &mask, const std::string &str, const size_t &i, std::mutex &mt)
+void find(std::vector<OutputData> &output, const std::string &mask, const std::string &str, const size_t &i, std::mutex &mt)
 {      
    if(str.length()>=mask.length())
    {
@@ -138,27 +186,27 @@ void find(std::vector<OutputDate> &output, const std::string &mask, const std::s
    }
 }
 
-void sortOutAndCheckInfo(std::vector<OutputDate> &output, std::vector<OutputDate> &firstData, int n)
+void sortOutAndCheckInfo(std::vector<OutputData> &output, std::vector<OutputData> &firstData, int n)
 {
-   std::sort(output.begin(), output.end(), OutputDateCompare);
+   std::sort(output.begin(), output.end(), OutputDataCompare);
    
    if(n==0)
       std::cout<<output.size()<<"\n";
    size_t t=0;
    
-   for(const OutputDate &date: output)
+   for(const OutputData &data: output)
    {
       if(n==0)
       {
-         firstData.push_back(date);
-         std::cout<<date.strNumber+1<<" "<<date.posNumber+1<<" "<<date.attachment<<"\n";
+         firstData.push_back(data);
+         std::cout<<data.strNumber+1<<" "<<data.posNumber+1<<" "<<data.attachment<<"\n";
       }
       else
       {
          if(
-            date.strNumber!=firstData[t].strNumber||
-            date.posNumber!=firstData[t].posNumber||
-            date.attachment!=firstData[t].attachment
+            data.strNumber!=firstData[t].strNumber||
+            data.posNumber!=firstData[t].posNumber||
+            data.attachment!=firstData[t].attachment
          )
             std::clog<<"Program is not correct!\n";
          ++t;
@@ -168,7 +216,7 @@ void sortOutAndCheckInfo(std::vector<OutputDate> &output, std::vector<OutputDate
 
 int mainRun(const char *filename, const std::string &mask, size_t amount_of_try)
 {
-   std::vector<OutputDate> firstData;
+   std::vector<OutputData> firstData;
    
    for(int n=0; n<amount_of_try; ++n)
    {
@@ -193,26 +241,41 @@ int mainRun(const char *filename, const std::string &mask, size_t amount_of_try)
          std::clog<<"Warning : processor count for your computer is not defined! It will be 1 by default.\n";
          processor_count=1;
       }
-      std::vector<OutputDate> output;
-      std::vector<std::thread> find_thread;
-   
-      for(int i=0; i<processor_count; ++i)
-      {
-         find_thread.push_back(std::thread(
+      std::vector<OutputData> output;
+      ring_string_buffer buffer(1024);
+      std::thread read_thread=std::thread(
             [&](){
             size_t curr_str_count=0;
             std::string s="";
-            bool reading=readLine(s, file, curr_str_count, string_count, mt);
+            bool lineIsRead=readLine(s, file, curr_str_count, string_count, mt);
             
-            while(reading)   
+            while(lineIsRead)   
+            {
+               buffer.push(s, curr_str_count, mt);
+               lineIsRead=readLine(s, file, curr_str_count, string_count, mt);
+            }
+         }
+         );
+      std::vector<std::thread> find_thread;
+      
+      for(int i=0; i<processor_count; ++i)
+      {
+         find_thread.emplace_back(std::thread(
+            [&](){
+            std::string s;
+            size_t curr_str_count=0;
+            bool lineIsAdded=buffer.pop(s, curr_str_count, mt);
+            
+            while(lineIsAdded)   
             {
                find(output, mask, s, curr_str_count, mt);
-               reading=readLine(s, file, curr_str_count, string_count, mt);
+               lineIsAdded=buffer.pop(s, curr_str_count, mt);
             }
          }
          ));
       } 
-   
+      read_thread.join();
+      
       for(int i=0; i<processor_count; ++i)
          find_thread[i].join();
       file.close();
