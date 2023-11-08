@@ -46,6 +46,8 @@ But I've come through.
 #include <thread>
 #include <algorithm>
 #include <filesystem>
+#include <mutex>
+#include <atomic>
 
 using namespace std;
 
@@ -67,26 +69,9 @@ struct
    }
 }
 OutputDateCompare;
-    
-vector<string> read(char* filename)
-{
-   vector<string> answer; 
-   ifstream file(filename);
-   
-   if(!file.is_open())
-      cerr<<"It is impossible to read this file! Check file name, or path to file, or file existing.\n";
-   else if(filesystem::file_size(filename)>1000000)
-      cerr<<"File is more than 1 GB!\n";
-   else
-   {
-      string s;
-   
-      while(getline(file, s))
-         answer.push_back(s);
-      file.close();
-   }
-   return answer;
-}
+
+mutex mt;
+size_t string_count=0;
 
 string getStr(const string &str, size_t start, size_t length)
 {
@@ -123,44 +108,41 @@ bool strEqualMask(const string &mask, const string &str)
    return true;
 }
 
-void find(vector<OutputDate> &output, const vector<string> &strings, const string &mask, size_t begin, size_t end)
+void find(vector<OutputDate> &output, const string &mask, const string &s, const size_t &pos_file)
 {   
-   if(!(begin>=end||end>strings.size()||end==0))
+   mt.lock();
+   const string str=s;
+   const size_t i=pos_file;
+   mt.unlock();
+   
+   if(str.length()>=mask.length())
    {
-      for(size_t i=begin; i<end; ++i)
+      size_t j=0;
+         
+      while(j<str.length()-mask.length())
       {
-         string str=strings[i];
-      
-         if(str.length()>=mask.length())
+         string curr_str=getStr(str, j, mask.length());
+         bool attIsFound=strEqualMask(mask, curr_str);
+         
+         while(
+            j<str.length()-mask.length()&&
+            (!attIsFound)
+         )
          {
-            size_t j=0;
+            ++j;
+            curr_str=getStr(str, j, mask.length());
+            attIsFound=strEqualMask(mask, curr_str);
+         }
          
-            while(j<str.length()-mask.length())
-            {
-               string curr_str=getStr(str, j, mask.length());
-               bool attIsFound=strEqualMask(mask, curr_str);
-         
-               while(
-                  j<str.length()-mask.length()&&
-                  (!attIsFound)
-               )
-               {
-                  ++j;
-                  curr_str=getStr(str, j, mask.length());
-                  attIsFound=strEqualMask(mask, curr_str);
-               }
-         
-               if(attIsFound)
-               {   
-                  output.push_back({i, j, curr_str});
-                  j+=curr_str.length();
-               }
-            }
+         if(attIsFound)
+         {   
+            mt.lock();
+            output.push_back({i, j, curr_str});
+            mt.unlock();
+            j+=curr_str.length();
          }
       }
    }
-   else
-      cerr<<"Wrong begin="<<begin<<" and end="<<end<<" parameters in vector with size="<<strings.size()<<"!\n";
 }
 
 void outInfo(vector<OutputDate> &output)
@@ -171,6 +153,79 @@ void outInfo(vector<OutputDate> &output)
    for(OutputDate date: output)
       cout<<date.strNumber+1<<" "<<date.posNumber+1<<" "<<date.attachment<<"\n";
 } 
+
+int exec(char *filename, const string &mask, size_t amount_of_try)
+{
+   for(int n=0; n<amount_of_try; ++n)
+   {
+      string_count=0;
+      ifstream file(filename);
+   
+      if(!file.is_open())
+      {
+         cerr<<"It is impossible to read this file! Check file name, or path to file, or file existing.\n";
+         return 4;
+      }
+      else if(filesystem::file_size(filename)>1000000000)
+      {   
+         cerr<<"File is more than 1 GB!\n";
+         return 5;
+      }
+      int processor_count=thread::hardware_concurrency();
+   
+      if(processor_count<=0)
+      {
+         clog<<"Warning : processor count for your computer is not defined! It will be 1 by default.\n";
+         processor_count=1;
+      }
+      vector<OutputDate> output;
+      vector<thread> find_thread;
+   
+      for(int i=0; i<processor_count; ++i)
+      {
+         find_thread.push_back(thread(
+            [&](){
+            mt.lock();
+            string s="";
+            size_t curfilepos=file.tellg();
+            getline(file, s);
+            bool reading=file.tellg()>curfilepos;
+            size_t curr_str_count=0;
+             
+            if(reading)
+            {
+               curr_str_count=string_count;
+               ++string_count;
+            }
+            mt.unlock();
+            
+            while(reading)   
+            {
+               find(output, mask, s, curr_str_count);
+               mt.lock();
+               s="";
+               curfilepos=file.tellg();
+               getline(file, s);
+               reading=file.tellg()>curfilepos;
+            
+               if(reading)
+               {
+                  curr_str_count=string_count;
+                  ++string_count;
+               }
+               mt.unlock();
+            }
+         }
+         ));
+      } 
+   
+      for(int i=0; i<processor_count; ++i)
+         find_thread[i].join();
+      file.close();
+      outInfo(output);
+   }
+   return 0;
+}
 
 int main(int argc, char* argv[])
 {
@@ -192,39 +247,6 @@ int main(int argc, char* argv[])
    {
       cerr<<"Mask can not contain \"\\n\"-symbol!\n";
       return 3;
-   }
-   vector<string> strings=read(filename);
-   
-   if(strings.empty())
-   {
-      cerr<<"Strings set is empty by some reasons.\n";
-      return 4;
-   }
-   int processor_count=thread::hardware_concurrency();
-   
-   if(processor_count<=0)
-   {
-      clog<<"Warning : processor count for your computer is not defined! It will be 1 by default.\n";
-      processor_count=1;
-   }
-   size_t str_amount=strings.size()/processor_count;
-   
-   if(strings.size()%processor_count>0)
-      ++str_amount;
-   vector<pair<size_t, size_t>> start_end;
-   size_t start=0;
-   vector<OutputDate> output;
-   
-   for(int i=0; i<processor_count; ++i)
-   {
-      size_t end=(i<processor_count-1)
-                ?start+str_amount
-                :strings.size();
-      start_end.push_back(make_pair(start, end));
-      thread find_thread([&]() {find(output, strings, mask, start_end[i].first, start_end[i].second);});
-      find_thread.detach();
-      start=end;
    }   
-   outInfo(output);
-   return 0;
+   return exec(filename, mask, 1);
 }
