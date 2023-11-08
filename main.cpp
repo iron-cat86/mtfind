@@ -169,7 +169,7 @@ void outInfo(vector<OutputDate> &output)
    cout<<output.size()<<"\n";
    
    for(OutputDate date: output)
-      cout<<date.strNumber<<" "<<date.posNumber<<" "<<date.attachment<<"\n";
+      cout<<date.strNumber+1<<" "<<date.posNumber+1<<" "<<date.attachment<<"\n";
 } 
 
 int main(int argc, char* argv[])
