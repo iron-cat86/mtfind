@@ -211,6 +211,7 @@ int main(int argc, char* argv[])
    
    if(strings.size()%processor_count>0)
       ++str_amount;
+   vector<pair<size_t, size_t>> start_end;
    size_t start=0;
    vector<OutputDate> output;
    
@@ -219,8 +220,9 @@ int main(int argc, char* argv[])
       size_t end=(i<processor_count-1)
                 ?start+str_amount
                 :strings.size();
-      thread find_thread([&]() {find(output, strings, mask, start, end);});
-      find_thread.join();
+      start_end.push_back(make_pair(start, end));
+      thread find_thread([&]() {find(output, strings, mask, start_end[i].first, start_end[i].second);});
+      find_thread.detach();
       start=end;
    }   
    outInfo(output);
