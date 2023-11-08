@@ -71,20 +71,6 @@ OutputDateCompare;
 std::mutex mt;
 size_t string_count=0;
 
-std::string getStr(const std::string &str, size_t start, size_t length)
-{
-   std::string answer="";
-   
-   if(start+length>str.length())
-      std::cerr<<"Wrong string getting from \""<<str<<"\" with start="<<start<<" and length="<<length<<"!\n";
-   else
-   {
-      for(size_t i=start; i<start+length; ++i)
-         answer+=str.data()[i];
-   }
-   return answer;
-}
-
 bool strEqualMask(const std::string &mask, const std::string &str)
 {
    if(mask.length()!=str.length())
@@ -131,7 +117,7 @@ void find(std::vector<OutputDate> &output, const std::string &mask, const std::s
          
       while(j<str.length()-mask.length())
       {
-         std::string curr_str=getStr(str, j, mask.length());
+         std::string curr_str=str.substr(j, mask.length());
          bool attIsFound=strEqualMask(mask, curr_str);
          
          while(
@@ -140,7 +126,7 @@ void find(std::vector<OutputDate> &output, const std::string &mask, const std::s
          )
          {
             ++j;
-            curr_str=getStr(str, j, mask.length());
+            curr_str=str.substr(j, mask.length());
             attIsFound=strEqualMask(mask, curr_str);
          }
          
