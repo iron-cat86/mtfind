@@ -88,7 +88,7 @@ vector<string> read(char* filename)
    return answer;
 }
 
-string getStr(string str, size_t start, size_t length)
+string getStr(const string &str, size_t start, size_t length)
 {
    string answer="";
    
@@ -102,7 +102,7 @@ string getStr(string str, size_t start, size_t length)
    return answer;
 }
 
-bool strEqualMask(string mask, string str)
+bool strEqualMask(const string &mask, const string &str)
 {
    if(mask.length()!=str.length())
       return false;
@@ -160,7 +160,7 @@ void find(vector<OutputDate> &output, const vector<string> &strings, const strin
       }
    }
    else
-      cerr<<"Wrong begin="<<begin<<" and end="<<end<<" parameters!\n";
+      cerr<<"Wrong begin="<<begin<<" and end="<<end<<" parameters in vector with size="<<strings.size()<<"!\n";
 }
 
 void outInfo(vector<OutputDate> &output)
@@ -176,7 +176,7 @@ int main(int argc, char* argv[])
 {
    if(argc!=3)
    {
-      cerr<<"Wrong amount of arguments!\n";
+      cerr<<"Wrong amount of arguments! "<<argc<<"\nUsage: mtfind <input file> \"<mask>\"\n";
       return 1;
    }
    char *filename=argv[1];
@@ -184,15 +184,21 @@ int main(int argc, char* argv[])
    
    if(mask.length()>1000)
    {
-      cerr<<"Mask is too long!\n";
+      cerr<<"Mask is too long! "<<mask.length()<<"\n Usage mask length less 1000 symbols.\n";
       return 2;
+   }
+   
+   if(mask.contains("\n"))
+   {
+      cerr<<"Mask can not contain \"\\n\"-symbol!\n";
+      return 3;
    }
    vector<string> strings=read(filename);
    
    if(strings.empty())
    {
-      cerr<<"Strings set is empty.\n";
-      return 3;
+      cerr<<"Strings set is empty by some rezons.\n";
+      return 4;
    }
    int processor_count=thread::hardware_concurrency();
    
