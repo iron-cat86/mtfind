@@ -76,7 +76,7 @@ vector<string> read(char* filename)
    if(!file.is_open())
       cerr<<"It is impossible to read this file! Check file name, or path to file, or file existing.\n";
    else if(filesystem::file_size(filename)>1000000)
-      cerr<<"File is more 1 GB!\n";
+      cerr<<"File is more than 1 GB!\n";
    else
    {
       string s;
@@ -184,10 +184,10 @@ int main(int argc, char* argv[])
    
    if(mask.length()>1000)
    {
-      cerr<<"Mask is too long! "<<mask.length()<<"\n Usage mask length less 1000 symbols.\n";
+      cerr<<"Mask is too long! "<<mask.length()<<"\n Use mask length less 1000 symbols.\n";
       return 2;
    }
-   
+      
    if(mask.contains("\n"))
    {
       cerr<<"Mask can not contain \"\\n\"-symbol!\n";
@@ -197,14 +197,14 @@ int main(int argc, char* argv[])
    
    if(strings.empty())
    {
-      cerr<<"Strings set is empty by some rezons.\n";
+      cerr<<"Strings set is empty by some reasons.\n";
       return 4;
    }
    int processor_count=thread::hardware_concurrency();
    
    if(processor_count<=0)
    {
-      clog<<"Warning : processor count for your computer is not defind! It will be 1 by default.\n";
+      clog<<"Warning : processor count for your computer is not defined! It will be 1 by default.\n";
       processor_count=1;
    }
    size_t str_amount=strings.size()/processor_count;
