@@ -108,13 +108,25 @@ bool strEqualMask(const string &mask, const string &str)
    return true;
 }
 
-void find(vector<OutputDate> &output, const string &mask, const string &s, const size_t &pos_file)
-{   
+bool readLine(string &s, ifstream &file, size_t &curr_str_count)
+{
    mt.lock();
-   const string str=s;
-   const size_t i=pos_file;
-   mt.unlock();
+   size_t curfilepos=file.tellg();
+   getline(file, s);
    
+   if(file.tellg()==curfilepos)
+   {
+      mt.unlock();
+      return false;
+   }
+   curr_str_count=string_count;
+   ++string_count;
+   mt.unlock();
+   return true;
+}
+
+void find(vector<OutputDate> &output, const string &mask, const string &str, const size_t &i)
+{      
    if(str.length()>=mask.length())
    {
       size_t j=0;
@@ -145,17 +157,38 @@ void find(vector<OutputDate> &output, const string &mask, const string &s, const
    }
 }
 
-void outInfo(vector<OutputDate> &output)
+void sortOutAndCheckInfo(vector<OutputDate> &output, vector<OutputDate> &firstData, int n)
 {
    sort(output.begin(), output.end(), OutputDateCompare);
-   cout<<output.size()<<"\n";
+   
+   if(n==0)
+      cout<<output.size()<<"\n";
+   size_t t=0;
    
    for(OutputDate date: output)
-      cout<<date.strNumber+1<<" "<<date.posNumber+1<<" "<<date.attachment<<"\n";
+   {
+      if(n==0)
+      {
+         firstData.push_back(date);
+         cout<<date.strNumber+1<<" "<<date.posNumber+1<<" "<<date.attachment<<"\n";
+      }
+      else
+      {
+         if(
+            date.strNumber!=firstData[t].strNumber||
+            date.posNumber!=firstData[t].posNumber||
+            date.attachment!=firstData[t].attachment
+         )
+            clog<<"Program is not correct!\n";
+         ++t;
+      }
+   }
 } 
 
-int exec(char *filename, const string &mask, size_t amount_of_try)
+int mainRun(const char *filename, const string &mask, size_t amount_of_try)
 {
+   vector<OutputDate> firstData;
+   
    for(int n=0; n<amount_of_try; ++n)
    {
       string_count=0;
@@ -185,35 +218,15 @@ int exec(char *filename, const string &mask, size_t amount_of_try)
       {
          find_thread.push_back(thread(
             [&](){
-            mt.lock();
-            string s="";
-            size_t curfilepos=file.tellg();
-            getline(file, s);
-            bool reading=file.tellg()>curfilepos;
             size_t curr_str_count=0;
-             
-            if(reading)
-            {
-               curr_str_count=string_count;
-               ++string_count;
-            }
-            mt.unlock();
-            
+            string s="";
+            size_t curfilepos=0;
+            bool reading=readLine(s, file, curr_str_count);
+                        
             while(reading)   
             {
                find(output, mask, s, curr_str_count);
-               mt.lock();
-               s="";
-               curfilepos=file.tellg();
-               getline(file, s);
-               reading=file.tellg()>curfilepos;
-            
-               if(reading)
-               {
-                  curr_str_count=string_count;
-                  ++string_count;
-               }
-               mt.unlock();
+               reading=readLine(s, file, curr_str_count);
             }
          }
          ));
@@ -222,7 +235,7 @@ int exec(char *filename, const string &mask, size_t amount_of_try)
       for(int i=0; i<processor_count; ++i)
          find_thread[i].join();
       file.close();
-      outInfo(output);
+      sortOutAndCheckInfo(output, firstData, n);
    }
    return 0;
 }
@@ -234,8 +247,8 @@ int main(int argc, char* argv[])
       cerr<<"Wrong amount of arguments! "<<argc<<"\nUsage: mtfind <input file> \"<mask>\"\n";
       return 1;
    }
-   char *filename=argv[1];
-   string mask=argv[2];
+   const char *filename=argv[1];
+   const string mask=argv[2];
    
    if(mask.length()>1000)
    {
@@ -248,5 +261,5 @@ int main(int argc, char* argv[])
       cerr<<"Mask can not contain \"\\n\"-symbol!\n";
       return 3;
    }   
-   return exec(filename, mask, 1);
+   return mainRun(filename, mask, 1000);
 }
