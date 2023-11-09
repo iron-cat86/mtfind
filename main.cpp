@@ -186,7 +186,7 @@ void find(std::vector<OutputData> &output, const std::string &mask, const std::s
    }
 }
 
-void sortOutAndCheckInfo(std::vector<OutputData> &output, std::vector<OutputData> &firstData, int n)
+void sortCheckAndOutput(std::vector<OutputData> &output, std::vector<OutputData> &firstData, int n)
 {
    std::sort(output.begin(), output.end(), OutputDataCompare);
    
@@ -247,13 +247,9 @@ int mainRun(const char *filename, const std::string &mask, size_t amount_of_try)
             [&](){
             size_t curr_str_count=0;
             std::string s="";
-            bool lineIsRead=readLine(s, file, curr_str_count, string_count, mt);
             
-            while(lineIsRead)   
-            {
+            while(readLine(s, file, curr_str_count, string_count, mt))
                buffer.push(s, curr_str_count, mt);
-               lineIsRead=readLine(s, file, curr_str_count, string_count, mt);
-            }
          }
          );
       std::vector<std::thread> find_thread;
@@ -264,13 +260,9 @@ int mainRun(const char *filename, const std::string &mask, size_t amount_of_try)
             [&](){
             std::string s;
             size_t curr_str_count=0;
-            bool lineIsAdded=buffer.pop(s, curr_str_count, mt);
             
-            while(lineIsAdded)   
-            {
+            while(buffer.pop(s, curr_str_count, mt))
                find(output, mask, s, curr_str_count, mt);
-               lineIsAdded=buffer.pop(s, curr_str_count, mt);
-            }
          }
          ));
       } 
@@ -279,7 +271,7 @@ int mainRun(const char *filename, const std::string &mask, size_t amount_of_try)
       for(int i=0; i<processor_count; ++i)
          find_thread[i].join();
       file.close();
-      sortOutAndCheckInfo(output, firstData, n);
+      sortCheckAndOutput(output, firstData, n);
    }
    return 0;
 }
