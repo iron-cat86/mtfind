@@ -112,8 +112,8 @@ private:
 private:
     std::pair<std::string, size_t>* storage;
     size_t                          range=0;
-    size_t                          tail=0;
-    size_t                          head=0;
+    volatile size_t                 tail=0;
+    volatile size_t                 head=0;
 };
 
 void findAttachments(std::vector<OutputData> &output, const std::string &mask, const std::string &str, const size_t &i, std::mutex &mt)
