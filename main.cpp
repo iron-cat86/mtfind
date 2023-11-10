@@ -225,9 +225,8 @@ bool readLine(std::string &s, std::ifstream &file, size_t &curr_str_count, size_
    return true;
 }
 
-void sortAndOutput(std::vector<OutputData> &output)
+void outputData(const std::vector<OutputData> &output)
 {
-   std::sort(output.begin(), output.end(), OutputDataCompare);
    std::cout<<output.size()<<"\n";
    
    for(const OutputData &data: output)
@@ -287,7 +286,8 @@ int mainRun(const char *filename, const std::string &mask)
    for(int i=0; i<processor_count; ++i)
       find_thread[i].join();
    file.close();
-   sortAndOutput(output);
+   std::sort(output.begin(), output.end(), OutputDataCompare);
+   outputData(output);
    return 0;
 }
 
