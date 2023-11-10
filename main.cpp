@@ -225,105 +225,69 @@ bool readLine(std::string &s, std::ifstream &file, size_t &curr_str_count, size_
    return true;
 }
 
-void sortCheckAndOutput(std::vector<OutputData> &output, std::vector<OutputData> &firstData, int n)
+void sortAndOutput(std::vector<OutputData> &output)
 {
    std::sort(output.begin(), output.end(), OutputDataCompare);
-   
-   if(n==0)
-      std::cout<<output.size()<<"\n";
-   size_t t=0;
+   std::cout<<output.size()<<"\n";
    
    for(const OutputData &data: output)
-   {
-      if(n==0)
-      {
-         firstData.push_back(data);
-         std::cout<<data.strNumber+1<<" "<<data.posNumber+1<<" "<<data.attachment<<"\n";
-      }
-      else
-      {
-         if(
-            data.strNumber!=firstData[t].strNumber||
-            data.posNumber!=firstData[t].posNumber||
-            data.attachment!=firstData[t].attachment
-         )
-            std::clog<<"Program is not correct!\n";
-         ++t;
-      }
-   }
+      std::cout<<data.strNumber+1<<" "<<data.posNumber+1<<" "<<data.attachment<<"\n";
 } 
 
-int mainRun(const char *filename, const std::string &mask, size_t amount_of_try)
-{
-   std::vector<OutputData> firstData;
-   double averageTime=0.;
+int mainRun(const char *filename, const std::string &mask)
+{  
+   std::mutex mt;
+   size_t string_count=0;
+   std::ifstream file(filename);
    
-   for(int n=0; n<amount_of_try; ++n)
+   if(!file.is_open())
    {
-      auto start=std::chrono::steady_clock::now();
-      std::mutex mt;
-      size_t string_count=0;
-      std::ifstream file(filename);
-   
-      if(!file.is_open())
-      {
-         std::cerr<<"It is impossible to read this file! Check file name, or path to file, or file existing.\n";
-         return 4;
-      }
-      else if(std::filesystem::file_size(filename)>1000000000)
-      {   
-         std::cerr<<"File is more than 1 GB!\n";
-         return 5;
-      }
-      int processor_count=1;//std::thread::hardware_concurrency();
-   
-      if(processor_count<=0)
-      {
-         std::clog<<"Warning : processor count for your computer is not defined! It will be 1 by default.\n";
-         processor_count=1;
-      }
-      std::vector<OutputData> output;
-      ring_string_buffer buffer(1024);
-      std::thread read_thread=std::thread(
-            [&](){
-            size_t curr_str_count=0;
-            std::string s="";
-            
-            while(readLine(s, file, curr_str_count, string_count, mt))
-            {   
-               buffer.push(s, curr_str_count, mt);
-               std::this_thread::yield();
-            }
-         }
-         );
-      std::vector<std::thread> find_thread;
-      
-      for(int i=0; i<processor_count; ++i)
-      {
-         find_thread.emplace_back(std::thread(
-            [&](){
-            std::string s;
-            size_t curr_str_count=0;
-            
-            while(buffer.pop(s, curr_str_count, mt))
-            {
-               findAttachments(output, mask, s, curr_str_count, mt);
-               std::this_thread::yield();
-            }
-         }
-         ));
-      } 
-      read_thread.join();
-      
-      for(int i=0; i<processor_count; ++i)
-         find_thread[i].join();
-      file.close();
-      sortCheckAndOutput(output, firstData, n);
-      auto finish=std::chrono::steady_clock::now();
-      averageTime+=(double)(1000*std::chrono::duration_cast<std::chrono::milliseconds>(finish-start).count());
+      std::cerr<<"It is impossible to read this file! Check file name, or path to file, or file existing.\n";
+      return 4;
    }
-   averageTime/=(double)amount_of_try;
-   std::clog<<"average time: "<<averageTime<<".\n";
+   else if(std::filesystem::file_size(filename)>1000000000)
+   {   
+      std::cerr<<"File is more than 1 GB!\n";
+      return 5;
+   }
+   int processor_count=std::thread::hardware_concurrency();
+   
+   if(processor_count<=0)
+   {
+      std::clog<<"Warning : processor count for your computer is not defined! It will be 1 by default.\n";
+      processor_count=1;
+   }
+   std::vector<OutputData> output;
+   ring_string_buffer buffer(1024);
+   std::thread read_thread=std::thread(
+         [&](){
+         size_t curr_str_count=0;
+         std::string s="";
+            
+         while(readLine(s, file, curr_str_count, string_count, mt))
+            buffer.push(s, curr_str_count, mt);
+      }
+      );
+   std::vector<std::thread> find_thread;
+      
+   for(int i=0; i<processor_count; ++i)
+   {
+      find_thread.emplace_back(std::thread(
+         [&](){
+         std::string s;
+         size_t curr_str_count=0;
+            
+         while(buffer.pop(s, curr_str_count, mt))
+            findAttachments(output, mask, s, curr_str_count, mt);
+      }
+      ));
+   } 
+   read_thread.join();
+      
+   for(int i=0; i<processor_count; ++i)
+      find_thread[i].join();
+   file.close();
+   sortAndOutput(output);
    return 0;
 }
 
@@ -348,5 +312,5 @@ int main(int argc, char* argv[])
       std::cerr<<"Mask can not contain \"\\n\"-symbol!\n";
       return 3;
    }   
-   return mainRun(filename, mask, 10000);
+   return mainRun(filename, mask);
 }
