@@ -47,7 +47,6 @@ But I've come through.
 #include <algorithm>
 #include <filesystem>
 #include <mutex>
-#include <atomic>
 
 struct OutputData
 {
@@ -112,8 +111,8 @@ private:
 private:
     std::pair<std::string, size_t>* storage;
     size_t                          range=0;
-    volatile size_t                 tail=0;
-    volatile size_t                 head=0;
+    size_t                          tail=0;
+    size_t                          head=0;
 };
 
 void findAttachments(std::vector<OutputData> &output, const std::string &mask, const std::string &str, const size_t &i, std::mutex &mt)
@@ -210,18 +209,14 @@ void findAttachments(std::vector<OutputData> &output, const std::string &mask, c
 
 bool readLine(std::string &s, std::ifstream &file, size_t &curr_str_count, size_t &string_count, std::mutex &mt)
 {
-   mt.lock();
+   std::unique_lock<std::mutex> t_locker(mt);
    size_t curfilepos=file.tellg();   
    getline(file, s);
    
    if(file.tellg()==curfilepos)
-   {
-      mt.unlock();
       return false;
-   }
    curr_str_count=string_count;
    ++string_count;
-   mt.unlock();
    return true;
 }
 
