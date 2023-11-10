@@ -116,25 +116,96 @@ private:
     size_t                          head=0;
 };
 
-bool strEqualMask(const std::string &mask, const std::string &str)
+void findAttachments(std::vector<OutputData> &output, const std::string &mask, const std::string &str, const size_t &i, std::mutex &mt)
 {
-   if(mask.length()!=str.length())
-      return false;
+   if(mask.length()>str.length())
+      return;
+   std::vector<std::vector<int64_t>> positions;
+   size_t n=0;
    
-   size_t i=0;
+   for(size_t n=0; n<mask.length(); ++n)
+   {
+      if(n>0&&positions.size()<n)
+         return;
+      
+      if(mask[n]=='?')
+         positions.push_back({-1});
+      else
+      {
+         size_t num=0;
+         size_t step_num=1;
+         int64_t pos_num=n>0?n-1:-1;
+         
+         if(n>0)
+         {
+            while(pos_num>=0&&positions[pos_num][0]==-1)
+            {
+               --pos_num;
+               ++step_num;
+            }
+         }
+         size_t m=(
+                    pos_num>=0
+                   ?positions[pos_num][0]+step_num
+                   :n 
+                  );
+      
+         while(
+            (pos_num<0&&m<str.length()-mask.length()+1+n)||
+            (pos_num>=0&&num<positions[pos_num].size())
+         )
+         {
+            if(mask[n]==str[m])
+            {
+               if(positions.size()==n)
+                  positions.push_back({(int64_t)m});
+               else
+                  positions[n].push_back((int64_t)m);
+            }
+            
+            if(pos_num<0)
+               ++m;
+            else
+            {
+               ++num;
+               m=positions[pos_num][num]+step_num;
+            }
+         }
+      }
+   }
    
-   while(
-      i<mask.length()&&
-      (
-         mask[i]==str[i]||
-         mask[i]=='?'
+   if(positions.size()<mask.length())
+      return; 
+  size_t en=mask.length()-1;
+   
+   while(positions[en][0]==-1&&en>0)
+      --en;
+   size_t range1=0;
+   size_t range2=0;
+      
+   for(size_t j=0; j<positions[en].size(); ++j)
+   {
+      size_t curr_range1=positions[en][j]-en;
+      size_t curr_range2=positions[en][j]-en+mask.length();
+      
+      if(
+         (range1==0&&range2==0)||
+         curr_range1>=range2
       )
-   )
-      ++i;
-   
-   if(i<mask.length())
-      return false;
-   return true;
+      {   
+         char *attachment=new char[mask.length()];
+      
+         for(size_t k=curr_range1; k<curr_range2; ++k)
+            attachment[k-curr_range1]=str[k];
+         attachment[mask.length()]=NULL;
+         mt.lock();
+         output.push_back({i, positions[en][j]-en, std::string(attachment)});
+         mt.unlock();
+         delete[]attachment;
+         range1=curr_range1;
+         range2=curr_range2;
+      }
+   }
 }
 
 bool readLine(std::string &s, std::ifstream &file, size_t &curr_str_count, size_t &string_count, std::mutex &mt)
@@ -152,38 +223,6 @@ bool readLine(std::string &s, std::ifstream &file, size_t &curr_str_count, size_
    ++string_count;
    mt.unlock();
    return true;
-}
-
-void find(std::vector<OutputData> &output, const std::string &mask, const std::string &str, const size_t &i, std::mutex &mt)
-{      
-   if(str.length()>=mask.length())
-   {
-      size_t j=0;
-         
-      while(j<str.length()-mask.length())
-      {
-         std::string curr_str=str.substr(j, mask.length());
-         bool attIsFound=strEqualMask(mask, curr_str);
-         
-         while(
-            j<str.length()-mask.length()&&
-            (!attIsFound)
-         )
-         {
-            ++j;
-            curr_str=str.substr(j, mask.length());
-            attIsFound=strEqualMask(mask, curr_str);
-         }
-         
-         if(attIsFound)
-         {   
-            mt.lock();
-            output.push_back({i, j, curr_str});
-            mt.unlock();
-            j+=curr_str.length();
-         }
-      }
-   }
 }
 
 void sortCheckAndOutput(std::vector<OutputData> &output, std::vector<OutputData> &firstData, int n)
@@ -217,9 +256,11 @@ void sortCheckAndOutput(std::vector<OutputData> &output, std::vector<OutputData>
 int mainRun(const char *filename, const std::string &mask, size_t amount_of_try)
 {
    std::vector<OutputData> firstData;
+   double averageTime=0.;
    
    for(int n=0; n<amount_of_try; ++n)
    {
+      auto start=std::chrono::steady_clock::now();
       std::mutex mt;
       size_t string_count=0;
       std::ifstream file(filename);
@@ -234,7 +275,7 @@ int mainRun(const char *filename, const std::string &mask, size_t amount_of_try)
          std::cerr<<"File is more than 1 GB!\n";
          return 5;
       }
-      int processor_count=std::thread::hardware_concurrency();
+      int processor_count=1;//std::thread::hardware_concurrency();
    
       if(processor_count<=0)
       {
@@ -249,7 +290,10 @@ int mainRun(const char *filename, const std::string &mask, size_t amount_of_try)
             std::string s="";
             
             while(readLine(s, file, curr_str_count, string_count, mt))
+            {   
                buffer.push(s, curr_str_count, mt);
+               std::this_thread::yield();
+            }
          }
          );
       std::vector<std::thread> find_thread;
@@ -262,7 +306,10 @@ int mainRun(const char *filename, const std::string &mask, size_t amount_of_try)
             size_t curr_str_count=0;
             
             while(buffer.pop(s, curr_str_count, mt))
-               find(output, mask, s, curr_str_count, mt);
+            {
+               findAttachments(output, mask, s, curr_str_count, mt);
+               std::this_thread::yield();
+            }
          }
          ));
       } 
@@ -272,7 +319,11 @@ int mainRun(const char *filename, const std::string &mask, size_t amount_of_try)
          find_thread[i].join();
       file.close();
       sortCheckAndOutput(output, firstData, n);
+      auto finish=std::chrono::steady_clock::now();
+      averageTime+=(double)(1000*std::chrono::duration_cast<std::chrono::milliseconds>(finish-start).count());
    }
+   averageTime/=(double)amount_of_try;
+   std::clog<<"average time: "<<averageTime<<".\n";
    return 0;
 }
 
@@ -297,5 +348,5 @@ int main(int argc, char* argv[])
       std::cerr<<"Mask can not contain \"\\n\"-symbol!\n";
       return 3;
    }   
-   return mainRun(filename, mask, 1000);
+   return mainRun(filename, mask, 10000);
 }
