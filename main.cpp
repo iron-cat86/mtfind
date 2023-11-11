@@ -83,7 +83,7 @@ public:
               
         if(gn==head)
            return false;
-        storage[tail]=std::move(std::make_pair(value, strNum));
+        storage[tail]=std::make_pair(std::move(value), std::move(strNum));
         tail=gn;
         return true;
     }
@@ -199,19 +199,6 @@ void findAttachments(std::vector<OutputData> &output, const std::string &mask, c
    }
 }
 
-bool readLine(std::string &s, std::ifstream &file, size_t &curr_str_count, size_t &string_count, std::mutex &mt)
-{
-   std::unique_lock<std::mutex> t_locker(mt);
-   size_t curfilepos=file.tellg();   
-   getline(file, s);
-   
-   if(file.tellg()==curfilepos)
-      return false;
-   curr_str_count=string_count;
-   ++string_count;
-   return true;
-}
-
 void outputData(const std::vector<OutputData> &output)
 {
    std::cout<<output.size()<<"\n";
@@ -248,12 +235,13 @@ int mainRun(const char *filename, const std::string &mask)
    std::thread read_thread=std::thread(
          [&](){
          size_t curr_str_count=0;
-         std::string s="";
+         std::string s;
             
-         while(readLine(s, file, curr_str_count, string_count, mt))
+         while(getline(file, s))
          {
             buffer.push(s, curr_str_count, mt);
             std::this_thread::yield();
+            ++curr_str_count;
          }
       }
       );
