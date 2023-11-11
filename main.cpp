@@ -81,34 +81,23 @@ public:
    bool push(T value)
    { 
       std::unique_lock<std::mutex> locker(mt);
-      size_t curr_tail=tail;
-      size_t curr_head=head;
+      size_t gn=get_next(tail);
 
-      if(get_next(curr_tail)==curr_head)
-      {
-         //mt.unlock();
+      if(gn==head)
          return false;
-      }
-      storage[curr_tail]=std::move(value);
-      tail=get_next(curr_tail);
-      //mt.unlock();
+      storage[tail]=std::move(value);
+      tail=gn;
       return true;
    }
 
    bool pop(T &value)
    {
       std::unique_lock<std::mutex> locker(mt);
-      size_t curr_head=head;
-      size_t curr_tail=tail;
-
-      if(curr_head==curr_tail)
-      {
-         //mt.unlock();
+   
+      if(head==tail)
          return false;
-      }
-      value=std::move(storage[curr_head]);
-      head=get_next(curr_head);
-      //mt.unlock();
+      value=std::move(storage[head]);
+      head=get_next(head);
       return true;
    }
 
