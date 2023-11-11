@@ -115,13 +115,52 @@ private:
     size_t                          head=0;
 };
 
-void findAttachments(std::vector<OutputData> &output, const std::string &mask, const std::string &str, const size_t &i, std::mutex &mt)
+inline void insertAttachment(
+   const std::string             &str, 
+         size_t                   mask_length, 
+         size_t                   m, 
+         size_t                   step, 
+         size_t                  &amountOfAtt, 
+         size_t                  &lab, 
+         size_t                   i, 
+         std::mutex              &mt, 
+         std::vector<OutputData> &output)
+{
+   char att[mask_length];
+   size_t start=m-step;
+                  
+   if(
+      amountOfAtt==0||
+      (amountOfAtt>0&&start>lab)
+   )
+   {
+      for(size_t j=start; j<start+mask_length; ++j)
+         att[j-start]=str[j];
+      att[mask_length]=NULL;
+      std::string attachment(att);
+      OutputData data={i, start, attachment};
+      mt.lock();
+      output.push_back(data);
+      mt.unlock();
+      ++amountOfAtt;
+      lab=start+mask_length-1;
+   }
+}
+
+void findAttachments(
+         std::vector<OutputData> &output, 
+   const std::string             &mask, 
+   const std::string             &str, 
+         size_t                   i, 
+         std::mutex              &mt)
 {
    if(mask.length()>str.length())
       return;
    std::vector<std::vector<int64_t>> positions;
    size_t n=0;
    int64_t pos_num=-1;
+   size_t amountOfAtt=0;
+   size_t lab=0;
    
    for(size_t n=0; n<mask.length(); ++n)
    {
@@ -129,7 +168,31 @@ void findAttachments(std::vector<OutputData> &output, const std::string &mask, c
          return;
       
       if(mask[n]=='?')
-         positions.push_back({-1});
+      {
+         if(n==mask.length()-1)
+         {
+            if(pos_num<0)
+            {
+               std::cerr<<"Wrong search algorithm!\n";
+               return;
+            }
+            
+            for(size_t k=0; k<positions[pos_num].size(); ++k)
+               insertAttachment(
+                  str, 
+                  mask.length(), 
+                  positions[pos_num][k], 
+                  pos_num, 
+                  amountOfAtt, 
+                  lab, 
+                  i, 
+                  mt, 
+                  output
+               );
+         }
+         else
+            positions.push_back({-1});
+      }
       else
       {
          size_t num=0;
@@ -147,7 +210,9 @@ void findAttachments(std::vector<OutputData> &output, const std::string &mask, c
          {
             if(mask[n]==str[m])
             {
-               if(positions.size()==n)
+               if(n==mask.length()-1)
+                  insertAttachment(str, mask.length(), m, n, amountOfAtt, lab, i, mt, output);
+               else if(positions.size()==n)
                   positions.push_back({(int64_t)m});
                else
                   positions[n].push_back((int64_t)m);
@@ -164,39 +229,6 @@ void findAttachments(std::vector<OutputData> &output, const std::string &mask, c
          pos_num=n;
       }
    }
-   
-   if(positions.size()<mask.length())
-      return; 
-  size_t en=mask.length()-1;
-   
-   while(positions[en][0]==-1&&en>0)
-      --en;
-   size_t range1=0;
-   size_t range2=0;
-      
-   for(size_t j=0; j<positions[en].size(); ++j)
-   {
-      size_t curr_range1=positions[en][j]-en;
-      size_t curr_range2=positions[en][j]-en+mask.length();
-      
-      if(
-         (range1==0&&range2==0)||
-         curr_range1>=range2
-      )
-      {   
-         char *attachment=new char[mask.length()];
-      
-         for(size_t k=curr_range1; k<curr_range2; ++k)
-            attachment[k-curr_range1]=str[k];
-         attachment[mask.length()]=NULL;
-         mt.lock();
-         output.push_back({i, positions[en][j]-en, std::string(attachment)});
-         mt.unlock();
-         delete[]attachment;
-         range1=curr_range1;
-         range2=curr_range2;
-      }
-   }
 }
 
 void outputData(const std::vector<OutputData> &output)
@@ -210,7 +242,6 @@ void outputData(const std::vector<OutputData> &output)
 int mainRun(const char *filename, const std::string &mask)
 {  
    std::mutex mt;
-   size_t string_count=0;
    std::ifstream file(filename);
    
    if(!file.is_open())
