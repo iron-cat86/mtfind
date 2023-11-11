@@ -78,7 +78,7 @@ public:
         head(0)
     {}
     
-   bool push(T value, std::mutex &mt)
+   bool push(T value)
    { 
       mt.lock();
       size_t curr_tail=tail;
@@ -95,7 +95,7 @@ public:
       return true;
    }
 
-   bool pop(T &value, std::mutex &mt)
+   bool pop(T &value)
    {
       mt.lock();
       size_t curr_head=head;
@@ -122,6 +122,7 @@ private:
 
 private:
     std::vector<T> storage;
+    std::mutex     mt;
     size_t         range=0;
     size_t         tail=0;
     size_t         head=0;
@@ -289,7 +290,6 @@ std::vector<OutputData> getOutputData(const char *filename, const std::string &m
    size_t try_str_count=0;
    bool fileIsOver=false;
    ring_buffer<std::pair<std::string, size_t>> buffer(1024);
-   std::mutex r_mt;
    std::mutex w_mt;
    std::mutex v_mt;
    std::thread read_thread=std::thread(
@@ -300,7 +300,7 @@ std::vector<OutputData> getOutputData(const char *filename, const std::string &m
          {
             std::pair<std::string, size_t> inh=std::make_pair(s, file_str_count);
             
-            while(!buffer.push(inh, r_mt));
+            while(!buffer.push(inh))
                std::this_thread::yield();
             ++file_str_count;
          }
@@ -335,7 +335,7 @@ std::vector<OutputData> getOutputData(const char *filename, const std::string &m
                )
             )
             {
-               took=buffer.pop(inh, w_mt);
+               took=buffer.pop(inh);
                std::this_thread::yield();
             }
             
