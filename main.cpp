@@ -67,38 +67,50 @@ struct
 }
 OutputDataCompare;
 
-class ring_string_buffer
+template <typename T>
+class ring_buffer
 {
 public:
-    ring_string_buffer(size_t capacity):
-        range(capacity + 1)
-    {
-       storage=new std::pair<std::string, size_t>[range];
-    }
+    ring_buffer(size_t capacity):
+        range(capacity+1),
+        storage(capacity+1), 
+        tail(0),
+        head(0)
+    {}
     
-    inline bool push(const std::string &value, size_t strNum, std::mutex &m_mutex)
-    { 
-        std::unique_lock<std::mutex> t_locker(m_mutex);
-        size_t gn=get_next(tail);
-              
-        if(gn==head)
-           return false;
-        storage[tail]=std::make_pair(std::move(value), std::move(strNum));
-        tail=gn;
-        return true;
-    }
+   bool push(T value, std::mutex &mt)
+   { 
+      mt.lock();
+      size_t curr_tail=tail;
+      size_t curr_head=head;
 
-    inline bool pop(std::string &value, size_t &strNum, std::mutex &m_mutex)
-    {
-        std::unique_lock<std::mutex> t_locker(m_mutex);
-        
-        if(head==tail)
-           return false;
-        value=std::move(storage[head].first);
-        strNum=std::move(storage[head].second);
-        head=get_next(head);
-        return true;
-    }
+      if(get_next(curr_tail)==curr_head)
+      {
+         mt.unlock();
+         return false;
+      }
+      storage[curr_tail]=std::move(value);
+      tail=get_next(curr_tail);
+      mt.unlock();
+      return true;
+   }
+
+   bool pop(T &value, std::mutex &mt)
+   {
+      mt.lock();
+      size_t curr_head=head;
+      size_t curr_tail=tail;
+
+      if(curr_head==curr_tail)
+      {
+         mt.unlock();
+         return false;
+      }
+      value=std::move(storage[curr_head]);
+      head=get_next(curr_head);
+      mt.unlock();
+      return true;
+   }
 
 private:
     inline size_t get_next(size_t slot) const
@@ -109,10 +121,10 @@ private:
     }
 
 private:
-    std::pair<std::string, size_t>* storage;
-    size_t                          range=0;
-    size_t                          tail=0;
-    size_t                          head=0;
+    std::vector<T> storage;
+    size_t         range=0;
+    size_t         tail=0;
+    size_t         head=0;
 };
 
 inline void insertAttachment(
@@ -122,9 +134,10 @@ inline void insertAttachment(
          size_t                   step, 
          size_t                  &amountOfAtt, 
          size_t                  &lab, 
-         size_t                   i, 
-         std::mutex              &mt, 
-         std::vector<OutputData> &output)
+         size_t                   i,  
+         std::mutex              &mt,
+         std::vector<OutputData> &output
+      )
 {
    char att[mask_length];
    size_t start=m-step;
@@ -152,7 +165,8 @@ void findAttachments(
    const std::string             &mask, 
    const std::string             &str, 
          size_t                   i, 
-         std::mutex              &mt)
+         std::mutex              &mt
+      )
 {
    if(mask.length()>str.length())
       return;
@@ -211,7 +225,17 @@ void findAttachments(
             if(mask[n]==str[m])
             {
                if(n==mask.length()-1)
-                  insertAttachment(str, mask.length(), m, n, amountOfAtt, lab, i, mt, output);
+                  insertAttachment(
+                     str, 
+                     mask.length(), 
+                     m, 
+                     n, 
+                     amountOfAtt, 
+                     lab, 
+                     i, 
+                     mt, 
+                     output
+                  );
                else if(positions.size()==n)
                   positions.push_back({(int64_t)m});
                else
@@ -241,7 +265,6 @@ void outputData(const std::vector<OutputData> &output)
 
 std::vector<OutputData> getOutputData(const char *filename, const std::string &mask)
 {  
-   std::mutex mt;
    std::ifstream file(filename);
    std::vector<OutputData> output;
    
@@ -257,49 +280,82 @@ std::vector<OutputData> getOutputData(const char *filename, const std::string &m
    }
    int processor_count=std::thread::hardware_concurrency();
    
-   if(processor_count<=0)
+   if(processor_count<2)
    {
-      std::clog<<"Warning : processor count for your computer is not defined! It will be 1 by default.\n";
-      processor_count=1;
+      std::clog<<"Warning : processor count for your computer is less 2! It will be 2 by default.\n";
+      processor_count=2;
    }
-   ring_string_buffer buffer(1024);
+   size_t file_str_count=0;
+   size_t try_str_count=0;
+   bool fileIsOver=false;
+   ring_buffer<std::pair<std::string, size_t>> buffer(1024);
+   std::mutex r_mt;
+   std::mutex w_mt;
+   std::mutex v_mt;
    std::thread read_thread=std::thread(
          [&](){
-         size_t curr_str_count=0;
          std::string s;
             
          while(getline(file, s))
          {
-            buffer.push(s, curr_str_count, mt);
-            std::this_thread::yield();
-            ++curr_str_count;
+            std::pair<std::string, size_t> inh=std::make_pair(s, file_str_count);
+            
+            while(!buffer.push(inh, r_mt));
+               std::this_thread::yield();
+            ++file_str_count;
          }
+         fileIsOver=true;
       }
       );
    std::vector<std::thread> find_thread;
       
-   for(int i=0; i<processor_count; ++i)
+   for(int i=0; i<processor_count-1; ++i)
    {
       find_thread.emplace_back(std::thread(
          [&](){
-         std::string s;
-         size_t curr_str_count=0;
+         std::pair<std::string, size_t> inh;
             
-         while(buffer.pop(s, curr_str_count, mt))
+         while(
+            !(
+               fileIsOver&&
+               try_str_count>=file_str_count
+            )
+         )
          {
-            findAttachments(output, mask, s, curr_str_count, mt);
-            std::this_thread::yield();
+            bool took=false;
+            
+            while(
+               !(
+                  took||
+                  (
+                     (!took)&&
+                     fileIsOver&&
+                     try_str_count>=file_str_count
+                  )
+               )
+            )
+            {
+               took=buffer.pop(inh, w_mt);
+               std::this_thread::yield();
+            }
+            
+            if(took)
+            {
+               findAttachments(output, mask, inh.first, inh.second, v_mt);
+               w_mt.lock();
+               ++try_str_count;
+               w_mt.unlock();
+            }
          }
       }
       ));
    } 
    read_thread.join();
       
-   for(int i=0; i<processor_count; ++i)
+   for(int i=0; i<processor_count-1; ++i)
       find_thread[i].join();
    file.close();
    std::sort(output.begin(), output.end(), OutputDataCompare);
-   outputData(output);
    return output;
 }
 
@@ -324,5 +380,31 @@ int main(int argc, char* argv[])
       std::cerr<<"Mask can not contain \"\\n\"-symbol!\n";
       return 3;
    }   
-   std::vector<OutputData> output=getOutputData(filename, mask);
+   std::vector<OutputData> controloutput=getOutputData(filename, mask);
+   outputData(controloutput);
+   
+   for(int i=0; i<10000; ++i)
+   {
+      std::vector<OutputData> output=getOutputData(filename, mask);
+      
+      if(output.size()!=controloutput.size())
+      {   
+         std::cerr<<"Prog is not correct!\n";
+         return 4;
+      }
+      
+      for(size_t j=0; j<output.size(); ++j)
+      {
+         if(
+            output[j].strNumber!=controloutput[j].strNumber||
+            output[j].posNumber!=controloutput[j].posNumber||
+            output[j].attachment!=controloutput[j].attachment
+         )
+         {
+            std::cerr<<"Prog is not correct!\n";
+            return 5;
+         }
+      }
+   }
+   return 0; 
 }
