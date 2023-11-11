@@ -125,8 +125,8 @@ inline void insertAttachment(
          size_t                  &amountOfAtt, 
          size_t                  &lab, 
          size_t                   i,  
-         std::mutex              &mt,
-         std::vector<OutputData> &output
+         std::vector<OutputData> &output,
+         std::mutex              &mt
       )
 {
    char att[mask_length];
@@ -141,12 +141,11 @@ inline void insertAttachment(
          att[j-start]=str[j];
       att[mask_length]=NULL;
       std::string attachment(att);
-      OutputData data={i, start, attachment};
-      mt.lock();
-      output.push_back(data);
-      mt.unlock();
       ++amountOfAtt;
       lab=start+mask_length-1;
+      OutputData data={i, start, attachment};
+      std::unique_lock<std::mutex> locker(mt);
+      output.push_back(data);
    }
 }
 
@@ -154,7 +153,7 @@ void findAttachments(
          std::vector<OutputData> &output, 
    const std::string             &mask, 
    const std::string             &str, 
-         size_t                   i, 
+         size_t                   i,
          std::mutex              &mt
       )
 {
@@ -190,8 +189,8 @@ void findAttachments(
                   amountOfAtt, 
                   lab, 
                   i, 
-                  mt, 
-                  output
+                  output,
+                  mt
                );
          }
          else
@@ -223,8 +222,8 @@ void findAttachments(
                      amountOfAtt, 
                      lab, 
                      i, 
-                     mt, 
-                     output
+                     output,
+                     mt
                   );
                else if(positions.size()==n)
                   positions.push_back({(int64_t)m});
