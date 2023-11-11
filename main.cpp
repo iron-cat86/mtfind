@@ -279,7 +279,6 @@ std::vector<OutputData> getOutputData(const char *filename, const std::string &m
    bool fileIsOver=false;
    ring_buffer<std::pair<std::string, size_t>> buffer(1024);
    std::mutex w_mt;
-   std::mutex v_mt;
    std::thread read_thread=std::thread(
          [&](){
          std::string s;
@@ -329,7 +328,7 @@ std::vector<OutputData> getOutputData(const char *filename, const std::string &m
             
             if(took)
             {
-               findAttachments(output, mask, inh.first, inh.second, v_mt);
+               findAttachments(output, mask, inh.first, inh.second, w_mt);
                std::unique_lock<std::mutex> locker(w_mt);
                ++try_str_count;
             }
@@ -369,29 +368,5 @@ int main(int argc, char* argv[])
    }   
    std::vector<OutputData> controloutput=getOutputData(filename, mask);
    outputData(controloutput);
-   
-   for(int i=0; i<10000; ++i)
-   {
-      std::vector<OutputData> output=getOutputData(filename, mask);
-      
-      if(output.size()!=controloutput.size())
-      {   
-         std::cerr<<"Prog is not correct!\n";
-         return 4;
-      }
-      
-      for(size_t j=0; j<output.size(); ++j)
-      {
-         if(
-            output[j].strNumber!=controloutput[j].strNumber||
-            output[j].posNumber!=controloutput[j].posNumber||
-            output[j].attachment!=controloutput[j].attachment
-         )
-         {
-            std::cerr<<"Prog is not correct!\n";
-            return 5;
-         }
-      }
-   }
    return 0; 
 }
