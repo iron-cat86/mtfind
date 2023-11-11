@@ -121,6 +121,7 @@ void findAttachments(std::vector<OutputData> &output, const std::string &mask, c
       return;
    std::vector<std::vector<int64_t>> positions;
    size_t n=0;
+   int64_t pos_num=-1;
    
    for(size_t n=0; n<mask.length(); ++n)
    {
@@ -132,17 +133,7 @@ void findAttachments(std::vector<OutputData> &output, const std::string &mask, c
       else
       {
          size_t num=0;
-         size_t step_num=1;
-         int64_t pos_num=n>0?n-1:-1;
-         
-         if(n>0)
-         {
-            while(pos_num>=0&&positions[pos_num][0]==-1)
-            {
-               --pos_num;
-               ++step_num;
-            }
-         }
+         size_t step_num=pos_num>=0?n-pos_num:1;
          size_t m=(
                     pos_num>=0
                    ?positions[pos_num][0]+step_num
@@ -170,6 +161,7 @@ void findAttachments(std::vector<OutputData> &output, const std::string &mask, c
                m=positions[pos_num][num]+step_num;
             }
          }
+         pos_num=n;
       }
    }
    
