@@ -236,7 +236,9 @@ void findAttachments(
             else
             {
                ++num;
-               m=positions[pos_num][num]+step_num;
+               
+               if(num<positions[pos_num].size())
+                  m=positions[pos_num][num]+step_num;
             }
          }
          pos_num=n;
