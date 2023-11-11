@@ -259,7 +259,10 @@ int mainRun(const char *filename, const std::string &mask)
          std::string s="";
             
          while(readLine(s, file, curr_str_count, string_count, mt))
+         {
             buffer.push(s, curr_str_count, mt);
+            std::this_thread::yield();
+         }
       }
       );
    std::vector<std::thread> find_thread;
@@ -272,7 +275,10 @@ int mainRun(const char *filename, const std::string &mask)
          size_t curr_str_count=0;
             
          while(buffer.pop(s, curr_str_count, mt))
+         {
             findAttachments(output, mask, s, curr_str_count, mt);
+            std::this_thread::yield();
+         }
       }
       ));
    } 
