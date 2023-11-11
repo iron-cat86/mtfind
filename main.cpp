@@ -239,20 +239,21 @@ void outputData(const std::vector<OutputData> &output)
       std::cout<<data.strNumber+1<<" "<<data.posNumber+1<<" "<<data.attachment<<"\n";
 } 
 
-int mainRun(const char *filename, const std::string &mask)
+std::vector<OutputData> getOutputData(const char *filename, const std::string &mask)
 {  
    std::mutex mt;
    std::ifstream file(filename);
+   std::vector<OutputData> output;
    
    if(!file.is_open())
    {
       std::cerr<<"It is impossible to read this file! Check file name, or path to file, or file existing.\n";
-      return 4;
+      return output;
    }
    else if(std::filesystem::file_size(filename)>1000000000)
    {   
       std::cerr<<"File is more than 1 GB!\n";
-      return 5;
+      return output;
    }
    int processor_count=std::thread::hardware_concurrency();
    
@@ -261,7 +262,6 @@ int mainRun(const char *filename, const std::string &mask)
       std::clog<<"Warning : processor count for your computer is not defined! It will be 1 by default.\n";
       processor_count=1;
    }
-   std::vector<OutputData> output;
    ring_string_buffer buffer(1024);
    std::thread read_thread=std::thread(
          [&](){
@@ -300,7 +300,7 @@ int mainRun(const char *filename, const std::string &mask)
    file.close();
    std::sort(output.begin(), output.end(), OutputDataCompare);
    outputData(output);
-   return 0;
+   return output;
 }
 
 int main(int argc, char* argv[])
@@ -324,5 +324,5 @@ int main(int argc, char* argv[])
       std::cerr<<"Mask can not contain \"\\n\"-symbol!\n";
       return 3;
    }   
-   return mainRun(filename, mask);
+   std::vector<OutputData> output=getOutputData(filename, mask);
 }
