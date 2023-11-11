@@ -330,9 +330,8 @@ std::vector<OutputData> getOutputData(const char *filename, const std::string &m
             if(took)
             {
                findAttachments(output, mask, inh.first, inh.second, v_mt);
-               w_mt.lock();
+               std::unique_lock<std::mutex> locker(w_mt);
                ++try_str_count;
-               w_mt.unlock();
             }
          }
       }
