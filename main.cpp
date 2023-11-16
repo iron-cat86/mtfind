@@ -283,7 +283,8 @@ std::vector<OutputData> getOutputData(const char *filename, const std::string &m
    size_t try_str_count=0;
    bool fileIsOver=false;
    ring_buffer<std::pair<std::string, size_t>> buffer(1024);
-   std::mutex w_mt;
+   std::mutex thr_mutex;
+   std::mutex vctr_mutex;
    std::thread read_thread=std::thread(
          [&](){
          std::string s;
@@ -294,10 +295,10 @@ std::vector<OutputData> getOutputData(const char *filename, const std::string &m
             
             while(!buffer.push_back(string_with_number))
                std::this_thread::yield();
-            std::unique_lock<std::mutex> locker(w_mt);
+            std::unique_lock<std::mutex> locker(thr_mutex);
             ++file_str_count;
          }
-         std::unique_lock<std::mutex> locker(w_mt);
+         std::unique_lock<std::mutex> locker(thr_mutex);
          fileIsOver=true;
       }
       );
@@ -335,8 +336,8 @@ std::vector<OutputData> getOutputData(const char *filename, const std::string &m
             
             if(took)
             {
-               findAttachments(output, mask, string_with_number.first, string_with_number.second, w_mt);
-               std::unique_lock<std::mutex> locker(w_mt);
+               findAttachments(output, mask, string_with_number.first, string_with_number.second, vctr_mutex);
+               std::unique_lock<std::mutex> locker(thr_mutex);
                ++try_str_count;
             }
          }
