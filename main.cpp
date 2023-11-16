@@ -336,7 +336,13 @@ std::vector<OutputData> getOutputData(const char *filename, const std::string &m
             
             if(took)
             {
-               findAttachments(output, mask, string_with_number.first, string_with_number.second, vctr_mutex);
+               findAttachments(
+                  output, 
+                  mask, 
+                  string_with_number.first, 
+                  string_with_number.second, 
+                  vctr_mutex
+               );
                std::unique_lock<std::mutex> locker(thr_mutex);
                ++try_str_count;
             }
