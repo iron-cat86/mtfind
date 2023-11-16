@@ -78,7 +78,7 @@ public:
         head(0)
     {}
     
-   bool push(T value)
+   bool push_back(T value)
    { 
       std::unique_lock<std::mutex> locker(mt);
       size_t gn=get_next(tail);
@@ -90,7 +90,7 @@ public:
       return true;
    }
 
-   bool pop(T &value)
+   bool pop_front(T &value)
    {
       std::unique_lock<std::mutex> locker(mt);
    
@@ -123,28 +123,28 @@ inline void insertAttachment(
          size_t                   m, 
          size_t                   step, 
          size_t                  &amountOfAtt, 
-         size_t                  &lab, 
-         size_t                   i,  
+         size_t                  &endOfCurrAtt, 
+         size_t                   strNumber,  
          std::vector<OutputData> &output,
-         std::mutex              &mt
+         std::mutex              &v_mutex
       )
 {
    char att[mask_length];
-   size_t start=m-step;
+   size_t beginOfCurrAtt=m-step;
                   
    if(
       amountOfAtt==0||
-      (amountOfAtt>0&&start>lab)
+      (amountOfAtt>0&&beginOfCurrAtt>endOfCurrAtt)
    )
    {
-      for(size_t j=start; j<start+mask_length; ++j)
-         att[j-start]=str[j];
+      for(size_t i=beginOfCurrAtt; i<beginOfCurrAtt+mask_length; ++i)
+         att[i-beginOfCurrAtt]=str[i];
       att[mask_length]=NULL;
       std::string attachment(att);
       ++amountOfAtt;
-      lab=start+mask_length-1;
-      OutputData data={i, start, attachment};
-      std::unique_lock<std::mutex> locker(mt);
+      endOfCurrAtt=beginOfCurrAtt+mask_length-1;
+      OutputData data={strNumber, beginOfCurrAtt, attachment};
+      std::unique_lock<std::mutex> locker(v_mutex);
       output.push_back(data);
    }
 }
@@ -153,44 +153,43 @@ void findAttachments(
          std::vector<OutputData> &output, 
    const std::string             &mask, 
    const std::string             &str, 
-         size_t                   i,
-         std::mutex              &mt
+         size_t                   strNumber,
+         std::mutex              &v_mutex
       )
 {
    if(mask.length()>str.length())
       return;
    std::vector<std::vector<int64_t>> positions;
-   size_t n=0;
-   int64_t pos_num=-1;
+   int64_t prev_const_pos=-1;
    size_t amountOfAtt=0;
-   size_t lab=0;
+   size_t endOfCurrAtt=0;
    
-   for(size_t n=0; n<mask.length(); ++n)
+   for(size_t i=0; i<mask.length(); ++i)
    {
-      if(n>0&&positions.size()<n)
+      if(i>0&&positions.size()<i)
          return;
       
-      if(mask[n]=='?')
+      if(mask[i]=='?')
       {
-         if(n==mask.length()-1)
+         if(i==mask.length()-1)
          {
-            if(pos_num<0)
+            if(prev_const_pos<0)
             {
                std::cerr<<"Wrong search algorithm!\n";
                return;
             }
             
-            for(size_t k=0; k<positions[pos_num].size(); ++k)
+            for(size_t j=0; j<positions[prev_const_pos].size(); ++j)
                insertAttachment(
                   str, 
                   mask.length(), 
-                  positions[pos_num][k], 
-                  pos_num, 
+                  positions[prev_const_pos][j], 
+                  prev_const_pos, 
                   amountOfAtt, 
-                  lab, 
-                  i, 
+                  endOfCurrAtt, 
+                  strNumber, 
                   output,
-                  mt
+                  v_mutex
                );
          }
          else
@@ -198,50 +197,54 @@ void findAttachments(
       }
       else
       {
-         size_t num=0;
-         size_t step_num=pos_num>=0?n-pos_num:1;
+         size_t nextPos=0;
+         size_t step=(
+                        prev_const_pos>=0
+                       ?i-prev_const_pos
+                       :1
+                    );
          size_t m=(
-                    pos_num>=0
-                   ?positions[pos_num][0]+step_num
-                   :n 
+                    prev_const_pos>=0
+                   ?positions[prev_const_pos][0]+step
+                   :i 
                   );
       
          while(
-            (pos_num<0&&m<str.length()-mask.length()+1+n)||
-            (pos_num>=0&&num<positions[pos_num].size())
+            (prev_const_pos<0&&m<str.length()-mask.length()+1+i)||
+            (prev_const_pos>=0&&nextPos<positions[prev_const_pos].size())
          )
          {
-            if(mask[n]==str[m])
+            if(mask[i]==str[m])
             {
-               if(n==mask.length()-1)
+               if(i==mask.length()-1)
                   insertAttachment(
                      str, 
                      mask.length(), 
                      m, 
-                     n, 
-                     amountOfAtt, 
-                     lab, 
                      i, 
+                     amountOfAtt, 
+                     endOfCurrAtt, 
+                     strNumber, 
                      output,
-                     mt
+                     v_mutex
                   );
-               else if(positions.size()==n)
+               else if(positions.size()==i)
                   positions.push_back({(int64_t)m});
                else
-                  positions[n].push_back((int64_t)m);
+                  positions[i].push_back((int64_t)m);
             }
             
-            if(pos_num<0)
+            if(prev_const_pos<0)
                ++m;
             else
             {
-               ++num;
+               ++nextPos;
                
-               if(num<positions[pos_num].size())
-                  m=positions[pos_num][num]+step_num;
+               if(nextPos<positions[prev_const_pos].size())
+                  m=positions[prev_const_pos][nextPos]+step;
             }
          }
-         pos_num=n;
+         prev_const_pos=i;
       }
    }
 }
@@ -287,12 +290,14 @@ std::vector<OutputData> getOutputData(const char *filename, const std::string &m
             
          while(getline(file, s))
          {
-            std::pair<std::string, size_t> inh=std::make_pair(s, file_str_count);
+            std::pair<std::string, size_t> string_with_number=std::make_pair(s, file_str_count);
             
-            while(!buffer.push(inh))
+            while(!buffer.push_back(string_with_number))
                std::this_thread::yield();
+            std::unique_lock<std::mutex> locker(w_mt);
             ++file_str_count;
          }
+         std::unique_lock<std::mutex> locker(w_mt);
          fileIsOver=true;
       }
       );
@@ -302,7 +307,7 @@ std::vector<OutputData> getOutputData(const char *filename, const std::string &m
    {
       find_thread.emplace_back(std::thread(
          [&](){
-         std::pair<std::string, size_t> inh;
+         std::pair<std::string, size_t> string_with_number;
             
          while(
             !(
@@ -324,13 +329,13 @@ std::vector<OutputData> getOutputData(const char *filename, const std::string &m
                )
             )
             {
-               took=buffer.pop(inh);
+               took=buffer.pop_front(string_with_number);
                std::this_thread::yield();
             }
             
             if(took)
             {
-               findAttachments(output, mask, inh.first, inh.second, w_mt);
+               findAttachments(output, mask, string_with_number.first, string_with_number.second, w_mt);
                std::unique_lock<std::mutex> locker(w_mt);
                ++try_str_count;
             }
